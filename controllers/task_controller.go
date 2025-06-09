@@ -11,20 +11,26 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type TaskResponse struct {
-	Status  int                    `json:"status"`
-	Message string                 `json:"message"`
-	ErrorMessage string            `json:"error_message"`
-	Task    map[string]interface{} `json:"task"`
+	Status       int                    `json:"status"`
+	Message      string                 `json:"message"`
+	ErrorMessage string                 `json:"error_message"`
+	Task         map[string]interface{} `json:"task"`
 }
 
 type TaskListResponse struct {
-	Status  int                      `json:"status"`
-	Message string                   `json:"message"`
-	ErrorMessage string              `json:"error_message"`
-	Tasks   []models.Task `json:"task_list"`
+	Status       int           `json:"status"`
+	Message      string        `json:"message"`
+	ErrorMessage string        `json:"error_message"`
+	Tasks        []models.Task `json:"task_list"`
+}
+
+type TaskRequest struct {
+	Limit int64 `uri:"limit" binding:"required"` // número máximo a recuperar
+	Page  int64 `uri:"page" binding:"required"`  // número de página
 }
 
 // Retorna un handler, que se configura en routes.go
@@ -39,8 +45,8 @@ func CreateTask(service *services.TasksService) gin.HandlerFunc {
 		if err := c.BindJSON(&task); err != nil {
 			c.JSON(http.StatusBadRequest,
 				TaskResponse{
-					Status:  http.StatusBadRequest,
-					Message: "error",
+					Status:       http.StatusBadRequest,
+					Message:      "error",
 					ErrorMessage: err.Error(),
 					// Data:    map[string]interface{}{"data": },
 				},
@@ -49,7 +55,7 @@ func CreateTask(service *services.TasksService) gin.HandlerFunc {
 		}
 
 		newTask := models.Task{
-			Id: primitive.NewObjectID(),  // ID automática
+			Id:          primitive.NewObjectID(), // ID automática
 			Title:       task.Title,
 			Description: task.Description,
 			Completed:   false,
@@ -61,8 +67,8 @@ func CreateTask(service *services.TasksService) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
 				TaskResponse{
-					Status:  http.StatusInternalServerError,
-					Message: "error",
+					Status:       http.StatusInternalServerError,
+					Message:      "error",
 					ErrorMessage: err.Error(),
 					// Data:    map[string]interface{}{"data": err.Error()},
 				},
@@ -95,8 +101,8 @@ func GetTasks(service *services.TasksService) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
 				TaskResponse{
-					Status:  http.StatusInternalServerError,
-					Message: "error",
+					Status:       http.StatusInternalServerError,
+					Message:      "error",
 					ErrorMessage: err.Error(),
 					// Task:    map[string]interface{}{"data": err.Error()},
 				},
@@ -110,8 +116,8 @@ func GetTasks(service *services.TasksService) gin.HandlerFunc {
 			if err = results.Decode(&singleTask); err != nil {
 				c.JSON(http.StatusInternalServerError,
 					TaskResponse{
-						Status:  http.StatusInternalServerError,
-						Message: "error",
+						Status:       http.StatusInternalServerError,
+						Message:      "error",
 						ErrorMessage: err.Error(),
 						// Task:    map[string]interface{}{"data": err.Error()},
 					},
@@ -125,7 +131,7 @@ func GetTasks(service *services.TasksService) gin.HandlerFunc {
 			TaskListResponse{
 				Status:  http.StatusOK,
 				Message: "success",
-				Tasks:    tasks,
+				Tasks:   tasks,
 			},
 		)
 	}
@@ -148,7 +154,7 @@ func EditTask(service *services.TasksService) gin.HandlerFunc {
 			c.JSON(
 				http.StatusBadRequest,
 				TaskResponse{
-					Status: http.StatusBadRequest,
+					Status:  http.StatusBadRequest,
 					Message: "error",
 					Task:    map[string]interface{}{"data": err.Error()},
 				},
@@ -166,7 +172,7 @@ func EditTask(service *services.TasksService) gin.HandlerFunc {
 			c.JSON(
 				http.StatusInternalServerError,
 				TaskResponse{
-					Status: http.StatusInternalServerError,
+					Status:  http.StatusInternalServerError,
 					Message: "error",
 					Task:    map[string]interface{}{"data": err.Error()},
 				},
@@ -180,7 +186,7 @@ func EditTask(service *services.TasksService) gin.HandlerFunc {
 				c.JSON(
 					http.StatusInternalServerError,
 					TaskResponse{
-						Status: http.StatusInternalServerError,
+						Status:  http.StatusInternalServerError,
 						Message: "error",
 						Task:    map[string]interface{}{"data": err.Error()},
 					},
@@ -191,9 +197,79 @@ func EditTask(service *services.TasksService) gin.HandlerFunc {
 		c.JSON(
 			http.StatusOK,
 			TaskResponse{
-				Status: http.StatusOK,
+				Status:  http.StatusOK,
 				Message: "succes",
-				Task: map[string]interface{}{"data": updatedTask},
+				Task:    map[string]interface{}{"data": updatedTask},
+			},
+		)
+	}
+}
+
+func GetPageTask(service *services.TasksService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Timeout de 10 segundos (bota la función en ese caso)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Obtiene los parámetros del requerimiento
+		// Como dato rosa, estos parámetros tienen que ser visibles fuera del módulo :'v
+		var req TaskRequest
+		if err := c.BindUri(&req); err != nil {
+			// En caso de error
+			c.JSON(http.StatusBadRequest,
+				TaskListResponse{
+					Status:       http.StatusBadRequest,
+					Message:      "error",
+					ErrorMessage: err.Error(),
+				},
+			)
+			return
+		}
+
+		// Se salta (offset) tantos como haya mostrado por página
+		skip := req.Page*req.Limit - req.Limit
+		log.Printf("Límite: %d, salto: %d", req.Limit, skip)
+		// Formatea las opciones
+		options := options.FindOptions{
+			Limit: &req.Limit,
+			Skip:  &skip,
+		}
+
+		// Obtiene el cursor con el resultado de la búsqueda
+		cursor, err := service.Collection.Find(ctx, bson.M{}, &options)
+		if err != nil {
+			// D:
+			c.JSON(http.StatusInternalServerError,
+				TaskListResponse{
+					Status:       http.StatusBadGateway,
+					Message:      "error",
+					ErrorMessage: err.Error(),
+				},
+			)
+			return
+		}
+
+		// Siempre es importante cerrar los cursores
+		defer cursor.Close(ctx)
+		// Añade las tareas a la lista que se pondrá en la salida
+		var tasks []models.Task
+		for cursor.Next(ctx) {
+			var task models.Task
+			if err := cursor.Decode(&task); err != nil {
+				log.Println(err.Error())
+				continue
+			}
+
+			tasks = append(tasks, task)
+		}
+
+		// Construye el mensaje de salida
+		c.JSON(http.StatusOK,
+			TaskListResponse{
+				Status:       http.StatusOK,
+				Message:      "success",
+				ErrorMessage: "",
+				Tasks:        tasks,
 			},
 		)
 	}

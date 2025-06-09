@@ -12,6 +12,7 @@ func RegisterRoutes(router *gin.Engine, service *services.TasksService) {
 	router.GET("/ping", controllers.PingController)
 
 	router.GET("/task", controllers.GetTasks(service))
+	router.GET("/task/:page/:limit", controllers.GetPageTask(service))
 
 	router.POST("/task", controllers.CreateTask(service))
 
