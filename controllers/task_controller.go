@@ -87,8 +87,7 @@ func CreateTask(service *services.TasksService) gin.HandlerFunc {
 	}
 }
 
-// Obtiene una lista con las tareas ("lista" en el sentido de respuesta en
-// formato JSON donde uno de los campos es la respuesta)
+// Obtiene una lista con las tareas (lista de models.Task, que es "jsonizable")
 func GetTasks(service *services.TasksService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -97,7 +96,7 @@ func GetTasks(service *services.TasksService) gin.HandlerFunc {
 		defer cancel()
 
 		// Recupera las tareas como mapa de BSON
-		results, err := service.Collection.Find(ctx, bson.M{})
+		cursor, err := service.Collection.Find(ctx, bson.M{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
 				TaskResponse{
@@ -110,10 +109,11 @@ func GetTasks(service *services.TasksService) gin.HandlerFunc {
 			return
 		}
 
-		defer results.Close(ctx)
-		for results.Next(ctx) {
+		// Para cerrar al final
+		defer cursor.Close(ctx)
+		for cursor.Next(ctx) {
 			var singleTask models.Task
-			if err = results.Decode(&singleTask); err != nil {
+			if err = cursor.Decode(&singleTask); err != nil {
 				c.JSON(http.StatusInternalServerError,
 					TaskResponse{
 						Status:       http.StatusInternalServerError,
@@ -162,6 +162,7 @@ func EditTask(service *services.TasksService) gin.HandlerFunc {
 		}
 		log.Print(task)
 
+		// El actualizable
 		update := bson.M{
 			"title":       task.Title,
 			"description": task.Description,
@@ -179,6 +180,7 @@ func EditTask(service *services.TasksService) gin.HandlerFunc {
 			)
 		}
 
+		// Esto es para confirmar que el cambio se hizo, en realidad
 		var updatedTask models.Task
 		if result.MatchedCount == 1 {
 			err := service.Collection.FindOne(ctx, bson.M{"_id": taskId}).Decode(&updatedTask)
@@ -205,6 +207,7 @@ func EditTask(service *services.TasksService) gin.HandlerFunc {
 	}
 }
 
+// Handler para obtener por páginas
 func GetPageTask(service *services.TasksService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Timeout de 10 segundos (bota la función en ese caso)
