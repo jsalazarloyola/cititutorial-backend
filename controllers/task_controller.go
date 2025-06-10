@@ -26,6 +26,7 @@ type TaskListResponse struct {
 	Message      string        `json:"message"`
 	ErrorMessage string        `json:"error_message"`
 	Tasks        []models.Task `json:"task_list"`
+	TotalTask    int64         `json:"total_tasks"`
 }
 
 type TaskRequest struct {
@@ -129,9 +130,11 @@ func GetTasks(service *services.TasksService) gin.HandlerFunc {
 		// La respuesta final con los datos
 		c.JSON(http.StatusOK,
 			TaskListResponse{
-				Status:  http.StatusOK,
-				Message: "success",
-				Tasks:   tasks,
+				Status:       http.StatusOK,
+				Message:      "success",
+				ErrorMessage: "",
+				TotalTask:    service.EstimateTotalDocs(),
+				Tasks:        tasks,
 			},
 		)
 	}
@@ -272,6 +275,7 @@ func GetPageTask(service *services.TasksService) gin.HandlerFunc {
 				Status:       http.StatusOK,
 				Message:      "success",
 				ErrorMessage: "",
+				TotalTask:    service.EstimateTotalDocs(),
 				Tasks:        tasks,
 			},
 		)

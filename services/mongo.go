@@ -25,6 +25,16 @@ func NewTasksService(client *mongo.Client, dbname string, name string) *TasksSer
     }
 }
 
+// Estima la cantidad de documentos en la colección
+func (ts TasksService) EstimateTotalDocs() int64 {
+    count, err := ts.Collection.EstimatedDocumentCount(context.TODO())
+    if err != nil {
+        log.Print("Error al contar documentos: ", err.Error())
+    }
+
+    return count
+}
+
 
 // Inicia y conecta con MongoDB
 func InitMongo() *mongo.Client {
