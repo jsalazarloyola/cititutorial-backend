@@ -12,11 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 type Authenticator struct {
 	service *services.LoginService
 }
-
 
 func NewAuthenticator(service *services.LoginService) Authenticator {
 	return Authenticator{
@@ -24,25 +22,29 @@ func NewAuthenticator(service *services.LoginService) Authenticator {
 	}
 }
 
-
 func (auth Authenticator) Login(c *gin.Context) (any, error) {
 	var loginValues models.Login
+	// log.Println("holi", c.Request.Body)
 
-	if err := c.BindJSON(&loginValues); err != nil { return nil, err }
+	if err := c.BindJSON(&loginValues); err != nil {
+		return nil, err
+	}
+	// log.Println(loginValues)
 	response, err := auth.service.DoRequestLogin(loginValues.User, loginValues.Password)
 
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	if len(response.Data) == 0 {
 		return nil, errors.New("usuario o contraseña incorrectas")
 	}
 
-	log.Println(response.Data)
+	// log.Println(response.Data)
 
 	user := models.User{Rut: response.Data["rut"].(string)}
 
 	return user, nil
 }
-
 
 // En caso de rellenar después
 func (auth Authenticator) Authorize(data any, c *gin.Context) bool {
@@ -52,26 +54,26 @@ func (auth Authenticator) Authorize(data any, c *gin.Context) bool {
 	return true
 }
 
-
 // La carga con los datos que tendrá el token
 func (auth Authenticator) Payload(data any) jwt.MapClaims {
 	user := data.(models.User)
 
 	claims := jwt.MapClaims{
-		"user": map[string]any {
-			"email": user.Email,
-			"rut": user.Rut,
+		"user": map[string]any{
+			"user": user.User,
+			"rut":   user.Rut,
 		},
 	}
 
 	return claims
 }
 
-
 // La cosa que manejará las sesiones al final
 func LoadJWTAuth(service *services.LoginService) *jwt.GinJWTMiddleware {
 	key := os.Getenv("JWT_KEY")
-	if key == "" { key="asdf" }
+	if key == "" {
+		key = "asdf"
+	}
 
 	auth := NewAuthenticator(service)
 
@@ -79,12 +81,12 @@ func LoadJWTAuth(service *services.LoginService) *jwt.GinJWTMiddleware {
 		Realm: "Tutorial",
 		Key:   []byte(key),
 		// Tiempo de vencimiento del token
-		Timeout: time.Hour * 24, // el día
+		Timeout:    time.Hour * 24, // el día
 		MaxRefresh: time.Hour * 24, // máximo tiempo para refrescar
-		
-		//Authenticator: 
-		Authorizator: auth.Authorize,
-		PayloadFunc: auth.Payload,
+
+		Authenticator: auth.Login,
+		Authorizator:  auth.Authorize,
+		PayloadFunc:   auth.Payload,
 		// Unauthorized:
 		// LoginResponse:
 		// LogoutResponse:

@@ -8,11 +8,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"strings"
 
 	"go-template/models"
 	"go-template/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 type LoginService struct {
@@ -20,7 +23,6 @@ type LoginService struct {
 	APIAuthUser     string // Usuario de la API
 	APIAuthPassword string // Password de la API
 }
-
 
 // Constructor (?)
 func NewLoginService() *LoginService {
@@ -31,7 +33,6 @@ func NewLoginService() *LoginService {
 
 	return &service
 }
-
 
 // Autenticación básica en la API
 func (service LoginService) GetBasicAuth() string {
@@ -69,15 +70,21 @@ func (service LoginService) RequestLogin(username string, password string) (*htt
 	request.Header.Set("Authorization", service.GetBasicAuth())
 	request.Header.Set("Content-Type", "application/json")
 
+	if gin.Mode() == "debug" {
+		req, _ := httputil.DumpRequestOut(request, true)
+		log.Println(string(req))
+	}
+
 	// El requerimiento en sí
 	client := &http.Client{}
 	response, err := client.Do(request)
 
-	log.Println(response)
+	// log.Println(response)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Println(response.StatusCode)
 	return response, nil
 }
 
@@ -85,12 +92,17 @@ func (service LoginService) DoRequestLogin(username string, password string) (*m
 	// uniforma y limpia
 	username = strings.ToLower(username)
 	username = strings.ReplaceAll(username, "@usach.cl", "")
+	// log.Println(username, password)
 	// Hace el requerimiento de login a la API de cuentas
 	response, err := service.RequestLogin(username, password)
-	if err != nil { return nil, err }
-	
+	if err != nil {
+		return nil, err
+	}
+
 	responseBody, err := io.ReadAll(response.Body)
-	if err != nil { return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	// Mensajes de error posibles
 	if response.StatusCode != 200 {
@@ -98,17 +110,22 @@ func (service LoginService) DoRequestLogin(username string, password string) (*m
 		err = json.Unmarshal(responseBody, &errorMessage)
 		if err != nil {
 			return nil, errors.New("error al recuperar el error")
-		} else {
-			log.Println(response.StatusCode, errorMessage)
 		}
+
+		// log.Println(response.StatusCode, errorMessage)
 
 		// El mensaje hay que castearlo, al parecer
 		return nil, errors.New(errorMessage["message"].(string))
 	}
+	// log.Println(string(responseBody), response.StatusCode)
 
 	var responseToLogin models.ResponseLogin
 	err = json.Unmarshal(responseBody, &responseToLogin)
-	if err != nil { return nil, errors.New("error al obtener la respuesta: " + err.Error())}
+	if err != nil {
+		return nil, errors.New("error al obtener la respuesta: " + err.Error())
+	}
+
+	log.Println(responseToLogin)
 
 	return &responseToLogin, nil
 }

@@ -13,13 +13,14 @@ func RegisterRoutes(router *gin.Engine, taskService *services.TasksService, logi
 	router.GET("/ping", controllers.PingController)
 
 	authMiddleware := middleware.LoadJWTAuth(loginService)
-	
+
+	// Login no está protegido :'v
+	router.POST("/api/login", authMiddleware.LoginHandler)
+
 	protected := router.Group("/api")
 
 	protected.Use(authMiddleware.MiddlewareFunc())
 	{
-		protected.POST("/login", authMiddleware.LoginHandler)
-
 		protected.GET("/task", controllers.GetTasks(taskService))
 		protected.GET("/task/:page/:limit", controllers.GetPageTask(taskService))
 
