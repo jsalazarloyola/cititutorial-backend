@@ -2,19 +2,30 @@ package routes
 
 import (
 	"go-template/controllers"
+	"go-template/middleware"
 	"go-template/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 // Configura las rutas de los requerimientos D:
-func RegisterRoutes(router *gin.Engine, service *services.TasksService) {
+func RegisterRoutes(router *gin.Engine, taskService *services.TasksService, loginService *services.LoginService) {
 	router.GET("/ping", controllers.PingController)
 
-	router.GET("/task", controllers.GetTasks(service))
-	router.GET("/task/:page/:limit", controllers.GetPageTask(service))
+	authMiddleware := middleware.LoadJWTAuth(loginService)
+	
+	protected := router.Group("/api")
 
-	router.POST("/task", controllers.CreateTask(service))
+	protected.Use(authMiddleware.MiddlewareFunc())
+	{
+		protected.POST("/login", authMiddleware.LoginHandler)
 
-	router.PUT("/task/:id", controllers.EditTask(service))
+		protected.GET("/task", controllers.GetTasks(taskService))
+		protected.GET("/task/:page/:limit", controllers.GetPageTask(taskService))
+
+		protected.POST("/task", controllers.CreateTask(taskService))
+
+		protected.PUT("/task/:id", controllers.EditTask(taskService))
+	}
+
 }
