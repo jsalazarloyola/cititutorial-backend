@@ -41,18 +41,35 @@ func (auth Authenticator) Login(c *gin.Context) (any, error) {
 
 	// log.Println(response.Data)
 
-	user := models.User{Rut: response.Data["rut"].(string)}
+	user := models.User{
+		Rut:  response.Data["rut"].(string),
+		User: response.Data["user"].(string),
+	}
 
 	return user, nil
 }
 
 // En caso de rellenar después
 func (auth Authenticator) Authorize(data any, c *gin.Context) bool {
+	if data == nil {
+		log.Println("ño >:c")
+		return false
+	}
 	userData := data.(map[string]any)
 	log.Println(userData)
 
 	return true
 }
+
+// La función IdentityHandler por defecto asume que la identificación viene
+// dada por IdentityKey, pero acá no usamos eso, sino que user, así que esto.
+// Una alternativa es usar el campo IdentityKey, que especifica cómo se llama
+// el campo que obtiene el usuario
+
+// func (auth Authenticator) IdentityHandler(c *gin.Context) any {
+// 	jwtClaims := jwt.ExtractClaims(c)
+// 	return jwtClaims["user"]
+// }
 
 // La carga con los datos que tendrá el token
 func (auth Authenticator) Payload(data any) jwt.MapClaims {
@@ -61,7 +78,7 @@ func (auth Authenticator) Payload(data any) jwt.MapClaims {
 	claims := jwt.MapClaims{
 		"user": map[string]any{
 			"user": user.User,
-			"rut":   user.Rut,
+			"rut":  user.Rut,
 		},
 	}
 
@@ -92,10 +109,10 @@ func LoadJWTAuth(service *services.LoginService) *jwt.GinJWTMiddleware {
 		// LogoutResponse:
 		// RefreshResponse:
 		// IdentityHandler:
-		// IdentityKey:
-		// TokenLookup:   "header: Authorization",
-		// TokenHeadName: "Bearer",
-		TimeFunc: time.Now,
+		IdentityKey:   "user",
+		TokenLookup:   "header: Authorization",
+		TokenHeadName: "Bearer",
+		TimeFunc:      time.Now,
 		// HTTPStatusMessageFunc:
 		// PrivKeyFile:          key,
 		// PrivKeyBytes:         []byte{},
